@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Property Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIINfBG9rRspShMGP5aLkP/86w7Hj7TGCtI=" crossorigin="" />
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+        h1 {
+            text-align: center;
+            color: #ffffff;
+        }
+        form {
+            margin-bottom: 30px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background-color: #1e1e1e;
+            color: #fff;
+            width: 100%;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .property-card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .property-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        .property-card h2 {
+            color: #4fc3f7;
+            margin-top: 0;
+        }
+        .property-card p {
+            margin: 6px 0;
+            font-size: 0.95em;
+        }
+        .property-card .price {
+            color: #66bb6a;
+            font-weight: bold;
+        }
+        .property-card a {
+            display: none;
+        }
+
+        /* --- Main Modal Styling --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s;
+        }
+        .modal-overlay.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+            transform: translateY(-20px);
+            transition: transform 0.3s;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+        }
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 2em;
+            color: #888;
+            cursor: pointer;
+        }
+        .modal-close:hover {
+            color: #fff;
+        }
+        .modal-content h2 {
+            color: #4fc3f7;
+            margin-top: 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .modal-main-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .modal-price {
+            color: #66bb6a;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .modal-location {
+            color: #bdbdbd;
+            font-size: 1em;
+        }
+        .modal-cover-image {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: zoom-in;
+        }
+        .modal-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .modal-detail-item {
+            background-color: #2e2e2e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .modal-detail-item strong {
+            color: #888;
+            display: block;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+        .modal-detail-item span {
+            font-size: 1em;
+            color: #fff;
+        }
+        .modal-contact-section {
+            background-color: #2e2e2e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+        }
+        .modal-contact-section h3 {
+            color: #4fc3f7;
+            margin-top: 0;
+        }
+        .modal-contact-item p {
+            margin: 5px 0;
+        }
+        .modal-contact-item strong {
+            color: #888;
+            display: block;
+        }
+
+        /* NEW: Map container styling */
+        #popup-map {
+            height: 300px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background-color: #333;
+        }
+
+        /* --- Fullscreen Gallery Modal Styling --- */
+        #galleryModal {
+            background-color: black;
+            z-index: 1001;
+            flex-direction: column;
+            cursor: zoom-out;
+        }
+        #galleryModal img {
+            max-width: 95%;
+            max-height: 95%;
+            object-fit: contain;
+            cursor: default;
+        }
+        #galleryClose {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 3em;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1002;
+            text-shadow: 0 0 5px black;
+        }
+        #galleryNavigation {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            transform: translateY(-50%);
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        .gallery-nav-btn {
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            font-size: 3em;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+        }
+        .gallery-nav-btn:hover {
+            background: rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Real Estate App</h1>
+    <form id="search-form">
+        <input type="text" id="query" placeholder="E.g. I want a villa in Abu Dhabi under 3 million with 2 bedrooms">
+        <button type="submit">Search</button>
+    </form>
+
+    <div id="results"></div>
+</div>
+
+<div id="propertyModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <div id="modal-details">
+            </div>
+    </div>
+</div>
+
+<div id="galleryModal" class="modal-overlay">
+    <span id="galleryClose">&times;</span>
+    <img id="fullscreenImage" src="" alt="Full Screen Property Image">
+    <div id="galleryNavigation">
+        <button id="prevBtn" class="gallery-nav-btn">&lt;</button>
+        <button id="nextBtn" class="gallery-nav-btn">&gt;</button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20n69z7K8K4F9N/u/eM1M7lR0D3P3S62t7/xYm2B41s=" crossorigin=""></script>
+<script>
+    const form = document.getElementById('search-form');
+    const resultsDiv = document.getElementById('results');
+    const modal = document.getElementById('propertyModal');
+    const modalDetails = document.getElementById('modal-details');
+    const galleryModal = document.getElementById('galleryModal');
+    const fullscreenImage = document.getElementById('fullscreenImage');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    let currentImages = [];
+    let currentImageIndex = 0;
+    let mapInstance = null; // Store the map instance to prevent re-initializing
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const query = document.getElementById('query').value.trim();
+        if (!query) return;
+
+        resultsDiv.innerHTML = '<p>Searching...</p>';
+
+        try {
+            const response = await fetch('/api/nl_search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            const data = await response.json();
+
+            if (!data.properties || data.properties.length === 0) {
+                resultsDiv.innerHTML = '<p>No properties found.</p>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '';
+            data.properties.forEach(prop => {
+                const card = document.createElement('div');
+                card.className = 'property-card';
+                card.dataset.id = prop.id;
+                card.innerHTML = `
+                    <img src="${prop.cover_photo_url || '/static/no-image.png'}" alt="Cover Image" style="width:100%; max-height:300px; object-fit:cover; border-radius:6px; margin-bottom:10px;">
+                    <h2>${prop.title || 'No Title'}</h2>
+                    <p class="price">Price: AED ${prop.price?.toLocaleString() || 'N/A'}</p>
+                    <p>Area: ${prop.area || 'N/A'} sqft</p>
+                    <p>Rooms: ${prop.rooms ?? 'N/A'} | Baths: ${prop.baths ?? 'N/A'}</p>
+                    <p>Location: ${prop.location_name || 'N/A'}</p>
+                    <p>Purpose: ${prop.purpose || 'N/A'}</p>
+                    <p>Agency: ${prop.agency_name || 'N/A'}</p>
+                `;
+                resultsDiv.appendChild(card);
+            });
+
+            document.querySelectorAll('.property-card').forEach(card => {
+                card.addEventListener('click', async function() {
+                    const propertyId = this.dataset.id;
+                    modalDetails.innerHTML = '<p>Loading details...</p>';
+                    modal.classList.add('active');
+
+                    try {
+                        const response = await fetch(`/api/properties/${propertyId}`);
+                        if (!response.ok) {
+                            throw new Error('Property not found.');
+                        }
+                        const property = await response.json();
+                        renderModalDetails(property);
+                    } catch (error) {
+                        modalDetails.innerHTML = `<p style="color: #ff6b6b;">Error: ${error.message}</p>`;
+                    }
+                });
+            });
+
+        } catch (error) {
+            console.error(error);
+            resultsDiv.innerHTML = '<p>Error fetching results.</p>';
+        }
+    });
+
+    // Main Modal Close
+    document.querySelector('.modal-close').addEventListener('click', () => {
+        modal.classList.remove('active');
+        if (mapInstance) {
+            mapInstance.remove();
+            mapInstance = null;
+        }
+    });
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('active');
+            if (mapInstance) {
+                mapInstance.remove();
+                mapInstance = null;
+            }
+        }
+    });
+
+    function renderModalDetails(prop) {
+        const formattedPrice = prop.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(prop.price) : 'N/A';
+        const coverImageUrl = prop.cover_photo_url ? `/get_image?url=${encodeURIComponent(prop.cover_photo_url)}` : 'https://via.placeholder.com/600x350?text=No+Image+Available';
+
+        currentImages = (prop.all_image_urls || []).map(url => `/get_image?url=${encodeURIComponent(url)}`);
+
+        // CRITICAL FIX: Store the property data on the modal element itself.
+        // This allows the MutationObserver to access it.
+        modal.dataset.property = JSON.stringify(prop);
+
+        modalDetails.innerHTML = `
+            <div class="modal-main-info">
+                <h2>${prop.title || 'No Title'}</h2>
+                <div>
+                    <p class="modal-price">${formattedPrice}</p>
+                    <p class="modal-location">Location: ${prop.location_name || 'N/A'}</p>
+                </div>
+            </div>
+
+            <div id="popup-map"></div>
+
+            <img id="popupCoverImage" src="${coverImageUrl}" alt="Property Cover Image" class="modal-cover-image" onerror="this.src='https://via.placeholder.com/600x350?text=Image+Not+Available';">
+
+            <div class="modal-details-grid">
+                <div class="modal-detail-item">
+                    <strong>Purpose</strong>
+                    <span>${prop.purpose || 'N/A'}</span>
+                </div>
+                <div class="modal-detail-item">
+                    <strong>Completion Status</strong>
+                    <span>${prop.completion_status || 'N/A'}</span>
+                </div>
+                <div class="modal-detail-item">
+                    <strong>Area</strong>
+                    <span>${prop.area ? `${prop.area} sqft` : 'N/A'}</span>
+                </div>
+                <div class="modal-detail-item">
+                    <strong>Rooms</strong>
+                    <span>${prop.rooms ?? 'N/A'}</span>
+                </div>
+                <div class="modal-detail-item">
+                    <strong>Baths</strong>
+                    <span>${prop.baths ?? 'N/A'}</span>
+                </div>
+                <div class="modal-detail-item">
+                    <strong>Down Payment</strong>
+                    <span>${prop.down_payment_percentage ? `${prop.down_payment_percentage}%` : 'N/A'}</span>
+                </div>
+            </div>
+
+            <div class="modal-contact-section">
+                <div class="modal-agency-info">
+                    <h3>Agency Details</h3>
+                    <p>${prop.agency_name || 'N/A'}</p>
+                </div>
+                <div class="modal-agent-info">
+                    <h3>Contact Person</h3>
+                    <p><strong>Name:</strong> ${prop.contact_name || 'N/A'}</p>
+                    <p><strong>Mobile:</strong> ${prop.mobile_number || 'N/A'}</p>
+                    <p><strong>WhatsApp:</strong> ${prop.whatsapp_number || 'N/A'}</p>
+                </div>
+            </div>
+        `;
+
+        modal.addEventListener('transitionend', function handler() {
+            if (modal.classList.contains('active')) {
+                if (prop.latitude && prop.longitude) {
+                    initializeModalMap(prop.latitude, prop.longitude);
+                }
+            }
+            modal.removeEventListener('transitionend', handler);
+        });
+
+        document.getElementById('popupCoverImage').addEventListener('click', openFullscreenGallery);
+    }
+
+    function initializeModalMap(lat, lng) {
+        if (mapInstance) {
+            mapInstance.remove();
+        }
+
+        mapInstance = L.map('popup-map').setView([lat, lng], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(mapInstance);
+
+        L.marker([lat, lng]).addTo(mapInstance)
+            .bindPopup(L.latLng(lat, lng).toString())
+            .openPopup();
+
+        mapInstance.invalidateSize();
+    }
+
+
+    // --- Fullscreen Gallery Functions ---
+    function openFullscreenGallery() {
+        if (currentImages.length > 0) {
+            const coverImageUrl = document.getElementById('popupCoverImage').src;
+            currentImageIndex = currentImages.indexOf(coverImageUrl);
+            if (currentImageIndex === -1) {
+                currentImageIndex = 0;
+            }
+            updateFullscreenImage();
+            galleryModal.classList.add('active');
+        } else {
+            fullscreenImage.src = document.getElementById('popupCoverImage').src;
+            galleryModal.classList.add('active');
+            document.getElementById('galleryNavigation').style.display = 'none';
+        }
+    }
+
+    function updateFullscreenImage() {
+        fullscreenImage.src = currentImages[currentImageIndex];
+    }
+
+    function showNextImage() {
+        currentImageIndex = (currentImageIndex + 1) % currentImages.length;
+        updateFullscreenImage();
+    }
+
+    function showPrevImage() {
+        currentImageIndex = (currentImageIndex - 1 + currentImages.length) % currentImages.length;
+        updateFullscreenImage();
+    }
+
+    // Gallery modal event listeners
+    prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPrevImage();
+    });
+    nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showNextImage();
+    });
+
+    document.getElementById('galleryClose').addEventListener('click', () => {
+        galleryModal.classList.remove('active');
+    });
+    galleryModal.addEventListener('click', (e) => {
+        if (e.target === galleryModal) {
+            galleryModal.classList.remove('active');
+        }
+    });
+
+</script>
+</body>
+</html>

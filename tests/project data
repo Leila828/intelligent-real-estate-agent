@@ -1,0 +1,17 @@
+your_real_estate_project/
+├── instance/               # Flask will create this for your SQLite DB file
+│   └── bayut.sqlite
+├── database/
+│   ├── __init__.py
+│   └── database.py         # Your NEW, normalized database interaction code
+│   └── schema.sql          # Your NEW, normalized schema
+├── api/
+│   ├── __init__.py
+│   └── bayut_scraper.py    # Your NEW, advanced API fetching code
+├── templates/              # NEW: Directory for HTML templates
+│   ├── map.html            # Your provided map HTML, modified
+│   ├── properties_list.html # Example for /home route
+│   └── property_detail.html # Example for /property/<id> route
+├── config.py               # Database path configuration
+├── app.py                  # NEW: Your main Flask application
+└── run_data_ingestion.py   # NEW: A dedicated script to run the data fetching and initial DB population

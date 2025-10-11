@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Property Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa; /* Light background */
+        }
+        #map {
+            height: 100%; /* Make map take full viewport height */
+            width: 100%;
+            background: #e0e0e0; /* Fallback background */
+        }
+
+        /* --- Loading Overlay & Error Message --- */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Above the map */
+            font-size: 1.2em;
+            color: #333;
+            pointer-events: none; /* Allows clicks to pass through when not active */
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            border-radius: 8px; /* Match other elements */
+        }
+        .loading-overlay.active {
+            opacity: 1;
+        }
+        .error-message {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1001;
+            display: none; /* Hidden by default */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        /* --- Leaflet Popup Styling --- */
+        .leaflet-popup.property-leaflet-popup .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            padding: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .leaflet-popup.property-leaflet-popup .leaflet-popup-content {
+            margin: 0 !important; /* Remove default content margin */
+        }
+        .property-popup {
+            font-family: Arial, sans-serif;
+            width: 250px;
+            max-width: 250px;
+            line-height: 1.4;
+            color: #333;
+        }
+        .property-popup img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            display: block;
+            background-color: #f0f0f0; /* Placeholder background */
+        }
+        .property-popup-details {
+            padding: 10px 15px;
+            box-sizing: border-box;
+        }
+        .property-popup h3 {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            font-size: 1.1em;
+            color: #007bff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .property-popup p {
+            margin: 3px 0;
+            font-size: 0.9em;
+        }
+        .property-popup .price {
+            font-weight: bold;
+            color: #28a745;
+            font-size: 1em;
+        }
+        .property-popup .details-link {
+            display: block;
+            margin-top: 10px;
+            text-align: center;
+            padding: 8px 0;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        .property-popup .details-link:hover {
+            background-color: #0056b3;
+        }
+
+        /* --- Property List Container --- */
+        #propertyListContainer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 300px; /* Adjust width as needed */
+            height: calc(100% - 40px); /* Full height minus top/bottom margin */
+            background: rgba(255, 255, 255, 0.95); /* Slightly transparent white */
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 900; /* Below loading overlay, above map */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* For rounded corners */
+        }
+
+        #propertyListHeader {
+            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        #propertyList {
+            flex-grow: 1; /* Make list content take remaining height */
+            overflow-y: auto; /* Enable vertical scrolling */
+            padding: 0 10px; /* Padding for list items */
+        }
+
+        .property-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 5px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            color: #333;
+        }
+        .property-list-item:last-child {
+            border-bottom: none;
+        }
+        .property-list-item:hover, .property-list-item.active {
+            background-color: #e9f5ff; /* Lighter blue on hover/active */
+            transform: translateY(-2px); /* Slight lift effect */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .property-list-item-title {
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-basis: 70%; /* Give title more space */
+            padding-right: 10px;
+        }
+        .property-list-item-price {
+            font-weight: bold;
+            color: #28a745;
+            flex-basis: 30%; /* Price on the right */
+            text-align: right;
+            white-space: nowrap;
+        }
+        .property-list-item:hover .property-list-item-title,
+        .property-list-item.active .property-list-item-title {
+            color: #0056b3; /* Darker blue on hover/active */
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="loadingOverlay" class="loading-overlay">Loading properties...</div>
+    <div id="errorMessage" class="error-message"></div>
+
+    <div id="propertyListContainer">
+        <div id="propertyListHeader">Properties in View</div>
+        <div id="propertyList">
+            <p style="text-align: center; color: #666; padding: 20px;">No properties found in view.</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Initialize the map without an initial setView, as we'll fit to bounds later
+        var map = L.map('map');
+        var currentMarkersLayer; // To hold the current layer of markers
+        var activeMarker = null; // To keep track of the currently highlighted marker
+        var activeListItem = null; // To keep track of the currently highlighted list item
+
+        // Add OpenStreetMap tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a scale control
+        L.control.scale().addTo(map);
+
+        // --- Custom Marker Shape (Circle Marker) ---
+        function createCircleMarker(latlng) {
+            return L.circleMarker(latlng, {
+                radius: 8,
+                fillColor: '#007bff',
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            });
+        }
+
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const errorMessage = document.getElementById('errorMessage');
+        const propertyListDiv = document.getElementById('propertyList');
+
+        function showLoading() {
+            loadingOverlay.classList.add('active');
+            errorMessage.style.display = 'none';
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.remove('active');
+        }
+
+        function showErrorMessage(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function clearActiveStates() {
+            if (activeMarker) {
+                if (activeMarker instanceof L.CircleMarker) {
+                    activeMarker.setStyle({ fillColor: '#007bff', color: '#fff' }); // Reset to original style
+                }
+                activeMarker = null;
+            }
+            if (activeListItem) {
+                activeListItem.classList.remove('active');
+                activeListItem = null;
+            }
+        }
+
+        function highlightProperty(propertyId, source) {
+            clearActiveStates();
+
+            currentMarkersLayer.eachLayer(function(marker) {
+                if (marker.options.propertyId === propertyId) {
+                    activeMarker = marker;
+                    if (marker instanceof L.CircleMarker) {
+                        marker.setStyle({ fillColor: '#ffc107', color: '#dc3545' });
+                    }
+                    if (source === 'list') {
+                        // For list hover, just highlight, don't open popup immediately
+                        // For list click, open popup and pan
+                    }
+                }
+            });
+
+            const listItem = document.querySelector(`.property-list-item[data-id="${propertyId}"]`);
+            if (listItem) {
+                activeListItem = listItem;
+                listItem.classList.add('active');
+                if (source === 'map') {
+                    listItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        }
+
+        // Function to add markers for properties and populate the list
+        function addBuildings(data, isInitialLoad = false) {
+            clearActiveStates();
+            if (currentMarkersLayer) {
+                map.removeLayer(currentMarkersLayer);
+            }
+            currentMarkersLayer = L.layerGroup();
+
+            propertyListDiv.innerHTML = '';
+
+            const validLocations = []; // To store valid lat/lng for fitting bounds
+
+            if (data && Array.isArray(data)) {
+                if (data.length === 0) {
+                    propertyListDiv.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No properties found in this area.</p>';
+                }
+
+                data.forEach(function(property) {
+                    if (property.latitude !== null && property.longitude !== null &&
+                        !isNaN(property.latitude) && !isNaN(property.longitude)) {
+
+                        const latlng = [property.latitude, property.longitude];
+                        validLocations.push(latlng);
+
+                        var marker = createCircleMarker(latlng);
+                        marker.options.propertyId = property.id;
+
+                        // Create the image URL for the proxy
+                        const imageUrl = property.cover_photo_url ?
+                                         `/get_image?url=${encodeURIComponent(property.cover_photo_url)}` :
+                                         'https://via.placeholder.com/250x150?text=No+Image';
+
+                        const formattedPrice = property.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(property.price) : 'N/A';
+
+                        // --- Popup Content and Delayed Image Loading ---
+                        // 1. Set a placeholder src or empty string
+                        // 2. Add a unique ID to the img tag
+                        // 3. Set the actual src when the popup opens
+                        var popupContent = `
+                            <div class="property-popup">
+                                <img id="popup-img-${property.id}" src="" alt="${property.title || 'Property Image'}"
+                                    onerror="this.onerror=null;this.src='https://via.placeholder.com/250x150?text=Image+Not+Available';">
+                                <div class="property-popup-details">
+                                    <h3>${property.title || 'Untitled Property'}</h3>
+                                    <p class="price">${formattedPrice}</p>
+                                    <p>${property.area ? `${property.area} sqft` : 'N/A'} | ${property.rooms !== null ? `${property.rooms} Beds` : 'N/A'} | ${property.baths !== null ? `${property.baths} Baths` : 'N/A'}</p>
+                                    <a href="/property/${property.id}" target="_blank" class="details-link">View Details</a>
+                                </div>
+                            </div>
+                        `;
+
+                        marker.bindPopup(popupContent, {
+                            maxWidth: 250,
+                            minWidth: 250,
+                            className: 'property-leaflet-popup'
+                        });
+
+                        // IMPORTANT: Set image src when popup opens
+                        marker.on('popupopen', function() {
+                            const imgElement = document.getElementById(`popup-img-${property.id}`);
+                            if (imgElement && imgElement.src === '') { // Only set if src is empty (not yet loaded)
+                                imgElement.src = imageUrl;
+                            }
+                        });
+
+
+                        marker.on('mouseover', function() {
+                            highlightProperty(property.id, 'map');
+                        });
+                        marker.on('mouseout', function() {
+                            clearActiveStates();
+                        });
+
+                        currentMarkersLayer.addLayer(marker);
+
+                        const listItem = document.createElement('div');
+                        listItem.classList.add('property-list-item');
+                        listItem.setAttribute('data-id', property.id);
+                        listItem.innerHTML = `
+                            <span class="property-list-item-title">${property.title || 'Untitled Property'}</span>
+                            <span class="property-list-item-price">${formattedPrice}</span>
+                        `;
+
+                        listItem.addEventListener('mouseover', function() {
+                            highlightProperty(property.id, 'list');
+                        });
+                        listItem.addEventListener('mouseout', function() {
+                            clearActiveStates();
+                        });
+                        listItem.addEventListener('click', function() {
+                            currentMarkersLayer.eachLayer(function(m) {
+                                if (m.options.propertyId === property.id) {
+                                    m.openPopup();
+                                    map.panTo(m.getLatLng());
+                                }
+                            });
+                        });
+
+                        propertyListDiv.appendChild(listItem);
+                    } else {
+                        console.warn("Property missing or invalid latitude/longitude, or has invalid values:", property);
+                    }
+                });
+
+                currentMarkersLayer.addTo(map);
+
+                if (isInitialLoad && validLocations.length > 0) {
+                    try {
+                        const bounds = L.latLngBounds(validLocations);
+                        map.fitBounds(bounds, { padding: [50, 350] });
+                    } catch (e) {
+                        console.error("Error fitting bounds:", e);
+                        map.setView([31.091125, 31.408324], 13);
+                    }
+                } else if (isInitialLoad && validLocations.length === 0) {
+                    map.setView([31.091125, 31.408324], 13);
+                }
+
+            } else {
+                showErrorMessage("Failed to load properties. Please try again.");
+                console.error("Invalid data structure received from Flask:", data);
+                if (isInitialLoad) {
+                    map.setView([31.091125, 31.408324], 13);
+                }
+            }
+            hideLoading();
+        }
+
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        }
+
+        const debouncedFetchBuildingsData = debounce(fetchBuildingsData, 500);
+
+        let isInitialMapLoad = true;
+        map.on('moveend', function () {
+            if (isInitialMapLoad) {
+                isInitialMapLoad = false;
+                return;
+            }
+            var bounds = map.getBounds();
+            debouncedFetchBuildingsData(bounds, false);
+        });
+
+        setTimeout(() => {
+            const initialWideBounds = L.latLngBounds([-90, -180], [90, 180]);
+            fetchBuildingsData(initialWideBounds, true);
+        }, 100);
+    </script>
+</body>
+</html>
