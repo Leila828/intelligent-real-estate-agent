@@ -70,7 +70,7 @@ def show_deployment_options():
     print("\n1. Railway (Recommended - Free):")
     print("   - Go to https://railway.app")
     print("   - Sign up with GitHub")
-    print("   - Click 'New Project' → 'Deploy from GitHub repo'")
+    print("   - Click 'New Project' -> 'Deploy from GitHub repo'")
     print("   - Select your repository")
     print("   - Railway will auto-deploy using railway.json")
     
