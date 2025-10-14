@@ -74,7 +74,8 @@ def _map_pf_data_to_db_schema(pf_listing):
     all_image_urls = [
         img.get("medium") for img in property_data.get("images", []) if img.get("medium")
     ]
-    all_image_urls_str = ",".join(all_image_urls)
+    # Keep as list instead of comma-separated string to avoid JSON parsing issues
+    all_image_urls_str = all_image_urls
 
     mobile_number = None
     whatsapp_number = None
@@ -225,21 +226,20 @@ def property_finder_search(search_filters: dict):
     """
     # Use the main location query for the initial location search
     print(f"print filters ff {search_filters}")
-    print(f"querry of location {search_filters['filters']['location_query']}")
     query = search_filters['filters'].get("location_query", "dubai")
+    print(f"querry of location {query}")
     print(f"query ff {query}")
     locations = search_location(query)
     # print(f"locations {locations}")
     attributes = locations.get("data", {}).get("attributes", [])
     first_location = attributes[0] if attributes else None
-    print(f"first_location  is {first_location}")
-
+    
     if not first_location:
-        print(f"❌ Could not find location for query: {query}.")
+        print(f"Could not find location for query: {query}.")
         return []
 
     search_filters["location_id"] = first_location["id"]
-    print(f"✅ Found city: {first_location['name']} (ID {search_filters['location_id']})")
+    print(f"Found city ID: {search_filters['location_id']}")
 
     # Add the keywords filter if it exists in the parsed filters
     keywords = search_filters.get("keywords")
@@ -248,12 +248,12 @@ def property_finder_search(search_filters: dict):
 
     build_id = initialise(search_filters)
     if not build_id:
-        print("❌ Could not get build ID. The website structure may have changed.")
+        print("Could not get build ID. The website structure may have changed.")
         return []
 
     page = search_filters.get("page", 1)
-    print(f"🔄 Fetching listings for page {page}...")
+    print(f"Fetching listings for page {page}...")
     listings = fetch_propertyfinder_listings(search_filters, build_id)
-    print(f"✅ Found {len(listings)} properties on page {page}")
+    print(f"Found {len(listings)} properties on page {page}")
 
     return listings

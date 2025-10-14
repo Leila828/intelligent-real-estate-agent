@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Property Search</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIINfBG9rRspShMGP5aLkP/86w7Hj7TGCtI=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
         /* General Styling */
         body {
@@ -304,12 +303,12 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20n69z7K8K4F9N/u/eM1M7lR0D3P3S62t7/xYm2B41s=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // DOM Element Caching
         const form = document.getElementById('search-form');
         const resultsDiv = document.getElementById('results');
+        console.log('resultsDiv found:', resultsDiv);
         const modal = document.getElementById('propertyModal');
         const modalDetails = document.getElementById('modal-details');
         const galleryModal = document.getElementById('galleryModal');
@@ -353,16 +352,31 @@
             resultsDiv.innerHTML = '<p>Searching...</p>';
 
             try {
-                const response = await fetch('/api/nl_search', {
+                // Try intelligent search first
+                const response = await fetch('/api/intelligent_search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query })
                 });
-                const data = await response.json();
-                console.log(data);
 
-                resultsDiv.innerHTML = '';
-                renderSearchResults(data);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Intelligent agent response:', data);
+                    resultsDiv.innerHTML = '';
+                    renderIntelligentResults(data);
+                } else {
+                    // Fallback to regular search
+                    console.log('Intelligent search failed, falling back to regular search');
+                    const fallbackResponse = await fetch('/api/nl_search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query })
+                    });
+                    const data = await fallbackResponse.json();
+                    console.log('Fallback API Response:', data);
+                    resultsDiv.innerHTML = '';
+                    renderSearchResults(data);
+                }
 
             } catch (error) {
                 console.error(error);
@@ -371,25 +385,470 @@
         }
 
         /**
+         * Renders intelligent agent results
+         * @param {object} data - The intelligent agent response
+         */
+        function renderIntelligentResults(data) {
+            const resultsDiv = document.getElementById('results');
+            
+            // Show agent understanding
+            const understandingDiv = document.createElement('div');
+            understandingDiv.className = 'agent-understanding';
+            understandingDiv.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let understandingHTML = `
+                <h3 style="margin-top: 0; color: #fff;">🤖 AI Agent Understanding</h3>
+                <p><strong>Intent:</strong> ${data.understanding.intent}</p>
+                <p><strong>Confidence:</strong> ${(data.understanding.confidence * 100).toFixed(1)}%</p>
+                <p><strong>Reasoning:</strong> ${data.understanding.reasoning}</p>
+            `;
+            
+            if (data.understanding.entities && Object.keys(data.understanding.entities).length > 0) {
+                understandingHTML += '<p><strong>Extracted Entities:</strong></p><ul>';
+                for (const [key, value] of Object.entries(data.understanding.entities)) {
+                    if (value && (Array.isArray(value) ? value.length > 0 : true)) {
+                        understandingHTML += `<li>${key}: ${Array.isArray(value) ? value.join(', ') : value}</li>`;
+                    }
+                }
+                understandingHTML += '</ul>';
+            }
+            
+            understandingDiv.innerHTML = understandingHTML;
+            resultsDiv.appendChild(understandingDiv);
+            
+            // Render the result based on intent
+            const result = data.result;
+            
+            if (result.intent === 'comparison') {
+                renderComparisonResult(result, resultsDiv);
+            } else if (result.intent === 'affordability') {
+                renderAffordabilityResult(result, resultsDiv);
+            } else if (result.intent === 'price_analysis') {
+                renderPriceAnalysisResult(result, resultsDiv);
+            } else if (result.intent === 'how_to_guide') {
+                renderGuideResult(result, resultsDiv);
+            } else if (result.intent === 'market_insights') {
+                renderMarketInsightsResult(result, resultsDiv);
+            } else if (result.intent === 'search_properties') {
+                renderPropertySearchResult(result, resultsDiv);
+            } else {
+                // Generic result rendering
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'agent-result';
+                resultDiv.style.cssText = `
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    border-left: 4px solid #007bff;
+                `;
+                resultDiv.innerHTML = `<h4>Result</h4><pre>${JSON.stringify(result, null, 2)}</pre>`;
+                resultsDiv.appendChild(resultDiv);
+            }
+        }
+        
+        function renderComparisonResult(result, resultsDiv) {
+            const comparisonDiv = document.createElement('div');
+            comparisonDiv.className = 'comparison-result';
+            comparisonDiv.style.cssText = `
+                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let comparisonHTML = '<h3 style="margin-top: 0; color: #fff;">📊 Location Comparison</h3>';
+            
+            if (result.comparison_data) {
+                for (const [location, data] of Object.entries(result.comparison_data)) {
+                    comparisonHTML += `
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="color: #fff; margin-top: 0;">${location}</h4>
+                            <p><strong>Properties Found:</strong> ${data.count}</p>
+                            ${data.avg_price ? `<p><strong>Average Price:</strong> AED ${data.avg_price.toLocaleString()}</p>` : ''}
+                            ${data.min_price && data.max_price ? `<p><strong>Price Range:</strong> AED ${data.min_price.toLocaleString()} - AED ${data.max_price.toLocaleString()}</p>` : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            if (result.insights && result.insights.length > 0) {
+                comparisonHTML += '<div style="margin-top: 15px;"><h4 style="color: #fff;">Key Insights:</h4><ul>';
+                result.insights.forEach(insight => {
+                    comparisonHTML += `<li style="margin: 5px 0;">${insight}</li>`;
+                });
+                comparisonHTML += '</ul></div>';
+            }
+            
+            comparisonDiv.innerHTML = comparisonHTML;
+            resultsDiv.appendChild(comparisonDiv);
+            
+            // Show properties if available
+            if (result.all_properties && result.all_properties.length > 0) {
+                result.all_properties.forEach(prop => {
+                    const card = createPropertyCard(prop);
+                    resultsDiv.appendChild(card);
+                });
+                attachCardClickListeners();
+            }
+        }
+        
+        function renderAffordabilityResult(result, resultsDiv) {
+            const affordabilityDiv = document.createElement('div');
+            affordabilityDiv.className = 'affordability-result';
+            affordabilityDiv.style.cssText = `
+                background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let affordabilityHTML = '<h3 style="margin-top: 0; color: #fff;">💰 Affordability Analysis</h3>';
+            
+            if (result.analysis) {
+                affordabilityHTML += '<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">';
+                for (const [key, value] of Object.entries(result.analysis)) {
+                    affordabilityHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                }
+                affordabilityHTML += '</div>';
+            }
+            
+            if (result.insights && result.insights.length > 0) {
+                affordabilityHTML += '<div style="margin-top: 15px;"><h4 style="color: #fff;">Insights:</h4><ul>';
+                result.insights.forEach(insight => {
+                    affordabilityHTML += `<li style="margin: 5px 0;">${insight}</li>`;
+                });
+                affordabilityHTML += '</ul></div>';
+            }
+            
+            affordabilityDiv.innerHTML = affordabilityHTML;
+            resultsDiv.appendChild(affordabilityDiv);
+            
+            // Show properties if available
+            if (result.properties && result.properties.length > 0) {
+                result.properties.forEach(prop => {
+                    const card = createPropertyCard(prop);
+                    resultsDiv.appendChild(card);
+                });
+                attachCardClickListeners();
+            }
+        }
+        
+        function renderPriceAnalysisResult(result, resultsDiv) {
+            const priceDiv = document.createElement('div');
+            priceDiv.className = 'price-analysis-result';
+            priceDiv.style.cssText = `
+                background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let priceHTML = '<h3 style="margin-top: 0; color: #fff;">📈 Price Analysis</h3>';
+            
+            if (result.analysis) {
+                priceHTML += '<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">';
+                for (const [key, value] of Object.entries(result.analysis)) {
+                    priceHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                }
+                priceHTML += '</div>';
+            }
+            
+            if (result.insights && result.insights.length > 0) {
+                priceHTML += '<div style="margin-top: 15px;"><h4 style="color: #fff;">Insights:</h4><ul>';
+                result.insights.forEach(insight => {
+                    priceHTML += `<li style="margin: 5px 0;">${insight}</li>`;
+                });
+                priceHTML += '</ul></div>';
+            }
+            
+            priceDiv.innerHTML = priceHTML;
+            resultsDiv.appendChild(priceDiv);
+            
+            // Show properties if available
+            if (result.properties && result.properties.length > 0) {
+                result.properties.forEach(prop => {
+                    const card = createPropertyCard(prop);
+                    resultsDiv.appendChild(card);
+                });
+                attachCardClickListeners();
+            }
+        }
+        
+        function renderGuideResult(result, resultsDiv) {
+            const guideDiv = document.createElement('div');
+            guideDiv.className = 'guide-result';
+            guideDiv.style.cssText = `
+                background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let guideHTML = `<h3 style="margin-top: 0; color: #fff;">📚 ${result.guide.title}</h3>`;
+            
+            if (result.guide.steps) {
+                guideHTML += '<div style="margin: 15px 0;"><ol style="color: #f0f0f0;">';
+                result.guide.steps.forEach(step => {
+                    guideHTML += `<li style="margin: 8px 0;">${step}</li>`;
+                });
+                guideHTML += '</ol></div>';
+            }
+            
+            if (result.guide.additional_info) {
+                guideHTML += '<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">';
+                for (const [key, value] of Object.entries(result.guide.additional_info)) {
+                    guideHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                }
+                guideHTML += '</div>';
+            }
+            
+            guideDiv.innerHTML = guideHTML;
+            resultsDiv.appendChild(guideDiv);
+        }
+        
+        function renderMarketInsightsResult(result, resultsDiv) {
+            const marketDiv = document.createElement('div');
+            marketDiv.className = 'market-insights-result';
+            marketDiv.style.cssText = `
+                background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            `;
+            
+            let marketHTML = '<h3 style="margin-top: 0; color: #fff;">📊 Market Insights</h3>';
+            
+            if (result.insights && result.insights.length > 0) {
+                marketHTML += '<div style="margin: 15px 0;"><ul style="color: #f0f0f0;">';
+                result.insights.forEach(insight => {
+                    marketHTML += `<li style="margin: 5px 0;">${insight}</li>`;
+                });
+                marketHTML += '</ul></div>';
+            }
+            
+            if (result.market_data) {
+                marketHTML += '<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">';
+                for (const [key, value] of Object.entries(result.market_data)) {
+                    if (typeof value === 'object') {
+                        marketHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong></p><ul>`;
+                        for (const [subKey, subValue] of Object.entries(value)) {
+                            marketHTML += `<li>${subKey}: ${subValue}</li>`;
+                        }
+                        marketHTML += '</ul>';
+                    } else {
+                        marketHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                    }
+                }
+                marketHTML += '</div>';
+            }
+            
+            marketDiv.innerHTML = marketHTML;
+            resultsDiv.appendChild(marketDiv);
+            
+            // Show properties if available
+            if (result.properties && result.properties.length > 0) {
+                result.properties.forEach(prop => {
+                    const card = createPropertyCard(prop);
+                    resultsDiv.appendChild(card);
+                });
+                attachCardClickListeners();
+            }
+        }
+        
+        function renderPropertySearchResult(result, resultsDiv) {
+            if (result.properties && result.properties.length > 0) {
+                result.properties.forEach(prop => {
+                    const card = createPropertyCard(prop);
+                    resultsDiv.appendChild(card);
+                });
+                attachCardClickListeners();
+            } else {
+                resultsDiv.innerHTML = '<p>No properties found.</p>';
+            }
+        }
+
+        /**
          * Renders the search results based on the API response.
          * @param {object} data - The data object from the API.
          */
         function renderSearchResults(data) {
+            // Handle multi-part questions
+            if (data.is_multi_question) {
+                const chatbotResponseDiv = document.createElement('div');
+                chatbotResponseDiv.id = 'chatbot-response';
+                chatbotResponseDiv.className = 'analytical-response';
+                chatbotResponseDiv.style.cssText = `
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                `;
+                
+                let responseHTML = '<h3 style="margin-top: 0; color: #fff;">Here are your answers:</h3>';
+                
+                // Render each answer
+                data.answers.forEach((answer, index) => {
+                    responseHTML += `
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="color: #fff; margin-top: 0;">Question ${index + 1}: ${answer.query}</h4>
+                            <p>${answer.answer.text}</p>
+                    `;
+                    
+                    // Add specific details based on answer type
+                    if (answer.type === 'analytical' && answer.answer.analysis) {
+                        responseHTML += `<div style="margin-top: 10px;">`;
+                        for (const [key, value] of Object.entries(answer.answer.analysis)) {
+                            responseHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                        }
+                        responseHTML += `</div>`;
+                    }
+                    
+                    responseHTML += `</div>`;
+                });
+                
+                chatbotResponseDiv.innerHTML = responseHTML;
+                resultsDiv.appendChild(chatbotResponseDiv);
+                
+                // Render combined property listings if any
+                if (data.combined_data && data.combined_data.length > 0) {
+                    console.log('Rendering combined', data.combined_data.length, 'properties');
+                    data.combined_data.forEach((prop, index) => {
+                        try {
+                            const card = createPropertyCard(prop);
+                            resultsDiv.appendChild(card);
+                        } catch (error) {
+                            console.error(`Error creating card ${index + 1}:`, error);
+                        }
+                    });
+                    attachCardClickListeners();
+                }
+                return;
+            }
+            
+            // Handle single questions
             if (data.is_question) {
                 const chatbotResponseDiv = document.createElement('div');
                 chatbotResponseDiv.id = 'chatbot-response';
-                chatbotResponseDiv.innerHTML = `<p>${data.answer.text}</p>`;
+                chatbotResponseDiv.className = 'analytical-response';
+                chatbotResponseDiv.style.cssText = `
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                `;
+                
+                let responseHTML = `<h3 style="margin-top: 0; color: #fff;">${data.answer.text}</h3>`;
+                
+                // Handle comparison questions
+                if (data.question_type === 'comparison_question' && data.answer.comparison) {
+                    responseHTML += `<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">`;
+                    for (const [location, stats] of Object.entries(data.answer.comparison)) {
+                        responseHTML += `
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px;">
+                                <h4 style="color: #fff; margin-top: 0;">${location}</h4>
+                                <p><strong>Average Price:</strong> ${stats.average_price || 'N/A'}</p>
+                                <p><strong>Price Range:</strong> ${stats.price_range || 'N/A'}</p>
+                                <p><strong>Properties Found:</strong> ${stats.property_count || stats.count || 0}</p>
+                            </div>
+                        `;
+                    }
+                    responseHTML += `</div>`;
+                }
+                
+                // Handle different types of analytical responses
+                if (data.answer.analysis) {
+                    responseHTML += `<div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 10px 0;">`;
+                    for (const [key, value] of Object.entries(data.answer.analysis)) {
+                        responseHTML += `<p><strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}</p>`;
+                    }
+                    responseHTML += `</div>`;
+                }
+                
+                if (data.answer.steps) {
+                    responseHTML += `<div style="margin: 15px 0;"><h4 style="color: #fff;">Steps:</h4><ol style="color: #f0f0f0;">`;
+                    data.answer.steps.forEach(step => {
+                        responseHTML += `<li style="margin: 8px 0;">${step}</li>`;
+                    });
+                    responseHTML += `</ol></div>`;
+                }
+                
+                if (data.answer.insights) {
+                    responseHTML += `<div style="margin: 15px 0;"><h4 style="color: #fff;">Insights:</h4><ul style="color: #f0f0f0;">`;
+                    data.answer.insights.forEach(insight => {
+                        responseHTML += `<li style="margin: 5px 0;">${insight}</li>`;
+                    });
+                    responseHTML += `</ul></div>`;
+                }
+                
+                if (data.answer.suggestions) {
+                    responseHTML += `<div style="margin: 15px 0;"><h4 style="color: #fff;">Suggestions:</h4><ul style="color: #f0f0f0;">`;
+                    data.answer.suggestions.forEach(suggestion => {
+                        responseHTML += `<li style="margin: 5px 0;">${suggestion}</li>`;
+                    });
+                    responseHTML += `</ul></div>`;
+                }
+                
+                if (data.answer.capabilities) {
+                    responseHTML += `<div style="margin: 15px 0;"><h4 style="color: #fff;">I can help with:</h4><ul style="color: #f0f0f0;">`;
+                    data.answer.capabilities.forEach(capability => {
+                        responseHTML += `<li style="margin: 5px 0;">${capability}</li>`;
+                    });
+                    responseHTML += `</ul></div>`;
+                }
+                
+                chatbotResponseDiv.innerHTML = responseHTML;
                 resultsDiv.appendChild(chatbotResponseDiv);
+                
+                // For questions, properties are in data.data
                 data = data.data;
             }
-            console.log(data);
+            console.log('Full response data:', data);
+            console.log('data type:', typeof data);
+            console.log('data.length:', data ? data.length : 'undefined');
+            console.log('data.properties:', data ? data.properties : 'undefined');
 
-            if (data && data.length > 0) {
-                data.forEach(prop => {
-                    resultsDiv.appendChild(createPropertyCard(prop));
+            // Check for properties in either data (for questions) or data.properties (for searches)
+            const properties = data && data.length > 0 ? data : (data.properties && data.properties.length > 0 ? data.properties : []);
+            console.log('Final properties array:', properties);
+            
+            if (properties && properties.length > 0) {
+                console.log('Rendering', properties.length, 'properties');
+                properties.forEach((prop, index) => {
+                    try {
+                        console.log(`Creating card ${index + 1}:`, prop.title || prop.id);
+                        const card = createPropertyCard(prop);
+                        resultsDiv.appendChild(card);
+                        console.log(`Card ${index + 1} appended successfully`);
+                    } catch (error) {
+                        console.error(`Error creating card ${index + 1}:`, error);
+                    }
                 });
                 attachCardClickListeners();
-            } else if (!data.is_question) {
+                console.log('All cards rendered, click listeners attached');
+            } else {
+                console.log('No properties to render, showing "No properties found"');
                 resultsDiv.innerHTML = '<p>No properties found.</p>';
             }
         }

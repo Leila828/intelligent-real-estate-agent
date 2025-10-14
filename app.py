@@ -1,15 +1,103 @@
 import io
 import math
+import re
 import requests
+import asyncio
 from urllib.parse import urlencode
 from flask import Flask, request, jsonify, send_file, abort, render_template, g
 from ollam import parse_natural_query, llama_fallback
 import database
 import test_prop as tp
 import property_finder
-
+from datetime import datetime
 import sqlite3
-from datetime import datetime, timedelta
+from intelligent_agent import agent
+
+def generate_agent_insights(listings, query, filters):
+    """Generate AI agent insights based on search results"""
+    insights = []
+    
+    if listings:
+        # Price analysis
+        prices = [item.get("price", 0) for item in listings if item.get("price")]
+        if prices:
+            avg_price = sum(prices) / len(prices)
+            min_price = min(prices)
+            max_price = max(prices)
+            
+            insights.append({
+                "type": "price_analysis",
+                "title": "Price Insights",
+                "message": f"Found {len(listings)} properties with prices ranging from AED {min_price:,.0f} to AED {max_price:,.0f}",
+                "data": {
+                    "average_price": avg_price,
+                    "price_range": {"min": min_price, "max": max_price},
+                    "property_count": len(listings)
+                }
+            })
+        
+        # Location analysis
+        locations = [item.get("location_name", "") for item in listings if item.get("location_name")]
+        if locations:
+            unique_locations = list(set(locations))
+            insights.append({
+                "type": "location_analysis",
+                "title": "Location Distribution",
+                "message": f"Properties found in {len(unique_locations)} different areas within {filters.get('query', 'the search area')}",
+                "data": {
+                    "unique_locations": len(unique_locations),
+                    "top_locations": unique_locations[:5]
+                }
+            })
+    else:
+        insights.append({
+            "type": "no_results",
+            "title": "No Properties Found",
+            "message": "No properties found matching your criteria. Try adjusting your search parameters.",
+            "suggestions": [
+                "Try a broader location search",
+                "Consider different property types",
+                "Adjust your price range",
+                "Check spelling of location names"
+            ]
+        })
+    
+    return insights
+
+def generate_proactive_suggestions(listings, query, filters):
+    """Generate proactive suggestions based on search results"""
+    suggestions = []
+    
+    if listings:
+        suggestions.extend([
+            "Would you like me to filter by price range?",
+            "I can help you compare similar properties",
+            "Would you like to see properties on a map?",
+            "I can set up alerts for new properties matching your criteria"
+        ])
+        
+        # Add specific suggestions based on results
+        if len(listings) > 10:
+            suggestions.append("You have many options! Would you like me to narrow down the search?")
+        
+        prices = [item.get("price", 0) for item in listings if item.get("price")]
+        if prices:
+            avg_price = sum(prices) / len(prices)
+            suggestions.append(f"The average price is AED {avg_price:,.0f}. Would you like to see properties around this price?")
+    else:
+        suggestions.extend([
+            "Try searching in nearby areas",
+            "Consider different property types",
+            "Adjust your budget range",
+            "Contact me for personalized assistance"
+        ])
+    
+    return suggestions
+
+def update_agent_memory(query, results, success):
+    """Update agent memory with interaction data"""
+    # Simple memory update - can be enhanced later
+    pass
 
 # --- Flask App Configuration ---
 app = Flask(__name__)
@@ -227,7 +315,7 @@ def search_properties(filters, page=1, limit=50):
     query_id = database.find_cached_query(query_string)
 
     if query_id:
-        print(f"✅ Cache hit for query: {query_string}")
+        print(f"Cache hit for query: {query_string}")
         # Retrieve paginated properties from the cache
         properties_data = database.get_properties_for_query(query_id)
 
@@ -239,7 +327,7 @@ def search_properties(filters, page=1, limit=50):
 
         return paginated_properties
     else:
-        print(f"🔄 Cache miss for query: {query_string}. Fetching live from Property Finder...")
+        print(f"Cache miss for query: {query_string}. Fetching live from Property Finder...")
 
         # 5. Fetch live data from Property Finder.
         #    Note: The Property Finder API itself does not have a 'limit' parameter,
@@ -252,12 +340,378 @@ def search_properties(filters, page=1, limit=50):
         search_params = {"filters": cleaned_filters}
         properties = property_finder.property_finder_search(search_params)
 
-        if properties:
+    if properties:
             # 6. Save the live data to the database.
-            database.save_query_and_properties(query_string, properties)
+        database.save_query_and_properties(query_string, properties)
 
-        return properties
+    return properties
 
+
+def handle_analytical_question(query, filters, search_properties_func):
+    """Handle analytical questions like price analysis, market insights, etc."""
+    query_lower = query.lower()
+    
+    # Check for comparison questions (e.g., "DIFC versus Downtown Dubai")
+    comparison_patterns = [r"versus", r"\bvs\.?\b", r"compared?\s+to", r"difference\s+between"]
+    is_comparison = any(re.search(pattern, query_lower) for pattern in comparison_patterns)
+    
+    if is_comparison:
+        # Extract two locations for comparison
+        locations = []
+        
+        # Try to extract locations using various patterns
+        vs_match = re.search(r"(?:in\s+)?([A-Za-z\s]+?)\s+(?:versus|vs\.?|compared?\s+to)\s+([A-Za-z\s]+?)(?:\?|$|\s+for|\s+properties)", query, re.IGNORECASE)
+        if vs_match:
+            locations = [vs_match.group(1).strip(), vs_match.group(2).strip()]
+        else:
+            # Try "difference between X and Y"
+            diff_match = re.search(r"difference\s+between\s+([A-Za-z\s]+?)\s+and\s+([A-Za-z\s]+?)(?:\?|$)", query, re.IGNORECASE)
+            if diff_match:
+                locations = [diff_match.group(1).strip(), diff_match.group(2).strip()]
+            else:
+                # Try "Compare X vs Y" pattern
+                compare_match = re.search(r"compare\s+(?:prices?\s+in\s+)?([A-Za-z\s]+?)\s+(?:vs\.?|versus)\s+([A-Za-z\s]+?)(?:\?|$)", query, re.IGNORECASE)
+                if compare_match:
+                    locations = [compare_match.group(1).strip(), compare_match.group(2).strip()]
+                else:
+                    # Try simpler pattern: "X vs Y"
+                    simple_match = re.search(r"([A-Za-z\s]+?)\s+(?:vs\.?|versus)\s+([A-Za-z\s]+?)(?:\?|$)", query, re.IGNORECASE)
+                    if simple_match:
+                        locations = [simple_match.group(1).strip(), simple_match.group(2).strip()]
+        
+        print(f"Extracted locations: {locations}")
+        if len(locations) == 2:
+            # Search both locations
+            results = {}
+            for location in locations:
+                try:
+                    search_filters = {"query": location}
+                    print(f"Searching for: {location}")
+                    props = search_properties_func(search_filters)
+                    results[location] = props
+                    print(f"Found {len(props) if props else 0} properties for {location}")
+                except Exception as e:
+                    print(f"Error searching {location}: {e}")
+                    results[location] = []
+            
+            # Calculate statistics for each location
+            comparison_data = {}
+            for location, props in results.items():
+                if props:
+                    prices = [p.get("price", 0) for p in props if p.get("price")]
+                    if prices:
+                        comparison_data[location] = {
+                            "count": len(props),
+                            "avg_price": sum(prices) / len(prices),
+                            "min_price": min(prices),
+                            "max_price": max(prices)
+                        }
+                    else:
+                        comparison_data[location] = {"count": len(props), "avg_price": None}
+                else:
+                    comparison_data[location] = {"count": 0, "avg_price": None}
+            
+            # Build comparison answer
+            if all(data.get("avg_price") for data in comparison_data.values()):
+                loc1, loc2 = locations
+                data1, data2 = comparison_data[loc1], comparison_data[loc2]
+                
+                diff = data1["avg_price"] - data2["avg_price"]
+                diff_pct = (diff / data2["avg_price"]) * 100 if data2["avg_price"] > 0 else 0
+                
+                answer = {
+                    "text": f"Comparison between {loc1} and {loc2}:",
+                    "comparison": {
+                        loc1: {
+                            "average_price": f"AED {data1['avg_price']:,.0f}",
+                            "price_range": f"AED {data1['min_price']:,.0f} - AED {data1['max_price']:,.0f}",
+                            "property_count": data1['count']
+                        },
+                        loc2: {
+                            "average_price": f"AED {data2['avg_price']:,.0f}",
+                            "price_range": f"AED {data2['min_price']:,.0f} - AED {data2['max_price']:,.0f}",
+                            "property_count": data2['count']
+                        }
+                    },
+                    "insights": [
+                        f"{loc1} has an average price of AED {data1['avg_price']:,.0f} ({data1['count']} properties)",
+                        f"{loc2} has an average price of AED {data2['avg_price']:,.0f} ({data2['count']} properties)",
+                        f"Difference: AED {abs(diff):,.0f} ({abs(diff_pct):.1f}% {'higher' if diff > 0 else 'lower'} in {loc1})"
+                    ]
+                }
+            else:
+                answer = {
+                    "text": "Comparison results:",
+                    "comparison": comparison_data,
+                    "insights": [
+                        f"{loc}: {data['count']} properties found" + (f" (avg: AED {data['avg_price']:,.0f})" if data.get('avg_price') else " (no price data)")
+                        for loc, data in comparison_data.items()
+                    ]
+                }
+            
+            # Combine all properties for display
+            all_props = []
+            for props in results.values():
+                all_props.extend(props if props else [])
+            
+            return jsonify({
+                "is_question": True,
+                "question_type": "comparison_question",
+                "query": query,
+                "answer": answer,
+                "data": all_props
+            }), 200
+    
+    # Get relevant properties for analysis
+    try:
+        listings = search_properties_func(filters.get('filters', {}))
+    except Exception as e:
+        try:
+            print(f"Error fetching properties for analysis: {e}")
+        except:
+            print("Error fetching properties for analysis")
+        listings = []
+    
+    # Affordability questions (e.g., "how many years of work needed ...", "can I afford ...")
+    if any(phrase in query_lower for phrase in ["how many years", "years of work", "can i afford", "afford", "salary needed", "how long to save"]):
+        # Pull listings using current filters (now enriched with keywords/location)
+        prices = []
+        if listings:
+            prices = [item.get("price", 0) for item in listings if item.get("price")]
+
+        # If no prices found, try a fallback broader search using only location/type inferred
+        if not prices:
+            base_filters = filters.get('filters', {}).copy()
+            # Keep only broad location/type filters
+            base_filters = {
+                k: v for k, v in base_filters.items() if k in ["query", "property_type", "keywords", "purpose", "beds"] and v
+            }
+            try:
+                fallback_listings = search_properties_func(base_filters)
+                prices = [item.get("price", 0) for item in fallback_listings if item.get("price")]
+            except Exception:
+                prices = []
+
+        if prices:
+            avg_price = sum(prices) / len(prices)
+            # Assumptions for affordability model
+            # - Default annual salary if not provided by user
+            # - 20% savings rate toward property purchase
+            # - No mortgage leverage considered (cash saving model for conservative estimate)
+            default_annual_salary = 240_000  # AED (~20k/month)
+            savings_rate = 0.20
+            annual_savings = default_annual_salary * savings_rate
+            years_needed = avg_price / annual_savings if annual_savings > 0 else None
+
+            location_label = filters.get('filters', {}).get('query', 'the area')
+            answer = {
+                "text": f"Estimated years of work needed to buy in {location_label}:",
+                "analysis": {
+                    "assumptions": {
+                        "annual_salary_aed": default_annual_salary,
+                        "savings_rate": f"{int(savings_rate*100)}%"
+                    },
+                    "average_price": f"AED {avg_price:,.0f}",
+                    "estimated_years_needed": f"{years_needed:.1f}" if years_needed is not None else "N/A"
+                },
+                "insights": [
+                    f"With AED {default_annual_salary:,.0f}/year income and {int(savings_rate*100)}% savings, you'd need ~{years_needed:.1f} years for the average property.",
+                    "Provide your actual yearly income or savings rate for a personalized estimate.",
+                    "Using mortgage financing can significantly reduce savings time; ask 'estimate with mortgage'."
+                ]
+            }
+        else:
+            answer = {
+                "text": "No properties found to estimate affordability.",
+                "suggestions": [
+                    "Try specifying the location more clearly (e.g., 'Victory Heights')",
+                    "Include the property type (e.g., 'Carmen villa')",
+                    "Ask again with your annual salary, e.g., 'with 300k AED salary'"
+                ]
+            }
+
+        return jsonify({
+            "is_question": True,
+            "question_type": "analytical_question",
+            "query": query,
+            "answer": answer,
+            "data": listings if listings else []
+        }), 200
+
+    # Price analysis questions
+    if any(phrase in query_lower for phrase in ["average price", "price range", "how much", "price analysis"]):
+        if listings:
+            prices = [item.get("price", 0) for item in listings if item.get("price")]
+            if prices:
+                avg_price = sum(prices) / len(prices)
+                min_price = min(prices)
+                max_price = max(prices)
+                
+                answer = {
+                    "text": f"Based on {len(listings)} available properties, here's the price analysis:",
+                    "analysis": {
+                        "average_price": f"AED {avg_price:,.0f}",
+                        "price_range": f"AED {min_price:,.0f} - AED {max_price:,.0f}",
+                        "property_count": len(listings),
+                        "location": filters.get('filters', {}).get('query', 'the search area')
+                    },
+                    "insights": [
+                        f"The average price is AED {avg_price:,.0f}",
+                        f"Prices range from AED {min_price:,.0f} to AED {max_price:,.0f}",
+                        f"Found {len(listings)} properties matching your criteria"
+                    ]
+                }
+            else:
+                answer = {
+                    "text": "I found properties but couldn't analyze prices as price information is not available.",
+                    "analysis": {"property_count": len(listings)}
+                }
+        else:
+            answer = {
+                "text": "No properties found for price analysis. Try adjusting your search criteria.",
+                "suggestions": [
+                    "Try a broader location search",
+                    "Consider different property types",
+                    "Check if the location name is spelled correctly"
+                ]
+            }
+        
+        return jsonify({
+            "is_question": True,
+            "question_type": "analytical_question",
+            "query": query,
+            "answer": answer,
+            "data": listings if listings else []
+        }), 200
+    
+    # How-to questions
+    elif any(phrase in query_lower for phrase in ["how to buy", "how to purchase", "how to sell"]):
+        location = filters.get('filters', {}).get('query', 'Dubai')
+        property_type = filters.get('filters', {}).get('property_type', 'property')
+        
+        if "buy" in query_lower or "purchase" in query_lower:
+            answer = {
+                "text": f"Here's how to buy a {property_type} in {location}:",
+                "steps": [
+                    "1. **Get Pre-Approval**: Contact a bank for mortgage pre-approval to know your budget",
+                    "2. **Find a Property**: Search for available properties in the area",
+                    "3. **Make an Offer**: Work with a real estate agent to make a competitive offer",
+                    "4. **Legal Process**: Complete due diligence, property inspection, and legal documentation",
+                    "5. **Final Payment**: Complete the transaction and transfer ownership"
+                ],
+                "additional_info": {
+                    "location": location,
+                    "property_type": property_type,
+                    "current_listings": len(listings) if listings else 0
+                }
+            }
+        else:  # selling
+            answer = {
+                "text": f"Here's how to sell a {property_type} in {location}:",
+                "steps": [
+                    "1. **Property Valuation**: Get a professional valuation to set the right price",
+                    "2. **Prepare the Property**: Clean, stage, and make necessary repairs",
+                    "3. **List the Property**: Work with a real estate agent or list online",
+                    "4. **Showings & Negotiations**: Handle property viewings and negotiate offers",
+                    "5. **Legal Process**: Complete documentation and transfer ownership"
+                ],
+                "additional_info": {
+                    "location": location,
+                    "property_type": property_type,
+                    "market_activity": len(listings) if listings else 0
+                }
+            }
+        
+        return jsonify({
+            "is_question": True,
+            "question_type": "analytical_question",
+            "query": query,
+            "answer": answer,
+            "data": listings if listings else []
+        }), 200
+    
+    # Market analysis questions
+    elif any(phrase in query_lower for phrase in ["market analysis", "market trends", "market overview"]):
+        if listings:
+            answer = {
+                "text": f"Market analysis for {filters.get('filters', {}).get('query', 'the area')}:",
+                "analysis": {
+                    "total_listings": len(listings),
+                    "property_types": list(set([item.get("property_type", "Unknown") for item in listings])),
+                    "price_insights": "Contact us for detailed market analysis"
+                },
+                "insights": [
+                    f"Found {len(listings)} active listings",
+                    "Market appears active with multiple options available",
+                    "Recommend consulting with a local real estate expert for detailed trends"
+                ]
+            }
+        else:
+            answer = {
+                "text": "No current market data available. The market may be quiet or the search criteria may be too specific.",
+                "suggestions": [
+                    "Try broader location search",
+                    "Consider different property types",
+                    "Contact a local real estate agent for market insights"
+                ]
+            }
+        
+        return jsonify({
+            "is_question": True,
+            "question_type": "analytical_question",
+            "query": query,
+            "answer": answer,
+            "data": listings if listings else []
+        }), 200
+    
+    # Default analytical response
+    else:
+        answer = {
+            "text": f"I understand you're asking about '{query}'. I can help with:",
+            "capabilities": [
+                "Price analysis and market insights",
+                "How-to guides for buying/selling",
+                "Property search and listings",
+                "Location-specific information"
+            ],
+            "suggestions": [
+                "Try asking 'What's the average price of villas in Dubai?'",
+                "Ask 'How to buy a villa in Damac Hills?'",
+                "Request 'Show me all villas for sale in Dubai Marina'"
+            ]
+        }
+        
+        return jsonify({
+            "is_question": True,
+            "question_type": "analytical_question",
+            "query": query,
+            "answer": answer,
+            "data": []
+        }), 200
+
+
+@app.route('/api/intelligent_search', methods=['POST'])
+def intelligent_search():
+    """Intelligent search using the AI agent"""
+    try:
+        data = request.get_json()
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return jsonify({"error": "Query is required"}), 400
+        
+        # Use the intelligent agent
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(agent.process_query(query))
+            return jsonify(result)
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        print(f"Error in intelligent search: {e}")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 @app.route("/api/nl_search", methods=["POST"])
 def nl_search():
@@ -265,13 +719,143 @@ def nl_search():
     query = data.get("query", "")
 
     # Parse query using regex + Ollama fallback
-    filters = parse_natural_query(query)
-    print(f"Query: {query}")
-    print(f"Filters is {filters}")
+    try:
+        filters = parse_natural_query(query)
+        print(f"Query: {query}")
+        try:
+            print(f"Filters: {filters}")
+        except Exception as e:
+            print(f"Filters contains non-printable characters: {type(e).__name__}")
+    except Exception as e:
+        print(f"Error parsing query: {e}")
+        return jsonify({
+            "error": "Failed to parse query",
+            "success": False,
+            "details": str(e)
+        }), 500
+
+    # Handle multi-part questions
+    if filters.get("is_multi_question"):
+        print("Processing multi-part question...")
+        combined_response = {
+            "is_multi_question": True,
+            "answers": [],
+            "combined_data": []
+        }
+        
+        try:
+            questions = filters.get("questions", [])
+            print(f"Found {len(questions)} sub-questions")
+            if not questions:
+                print("No questions found in multi-question request")
+                return jsonify({
+                    "error": "No questions found in multi-question request",
+                    "success": False
+                }), 400
+            
+            for i, sub_question in enumerate(questions):
+                try:
+                    print(f"\nProcessing sub-question {i + 1}:")
+                    # Process each sub-question
+                    sub_query = sub_question.get("original_query", "")
+                    if not sub_query:
+                        print("Empty sub-query, skipping...")
+                        continue
+                    print(f"Sub-query: {sub_query}")
+                        
+                    sub_type = sub_question.get("question_type", "search_request")
+                    sub_filters = sub_question.get("filters", {})
+                    print(f"Sub-type: {sub_type}")
+                    print(f"Sub-filters: {sub_filters}")
+                    
+                    if sub_type == "analytical_question":
+                        # Get properties for analysis
+                        listings = search_properties(sub_filters)
+                        
+                        # Generate analytical response
+                        if "average" in sub_query.lower() and "price" in sub_query.lower():
+                            if listings:
+                                prices = [item.get("price", 0) for item in listings if item.get("price")]
+                                if prices:
+                                    avg_price = sum(prices) / len(prices)
+                                    min_price = min(prices)
+                                    max_price = max(prices)
+                                    
+                                    answer = {
+                                        "text": f"Based on {len(listings)} properties in {sub_filters.get('query', 'the area')}:",
+                                        "analysis": {
+                                            "average_price": f"AED {avg_price:,.0f}",
+                                            "price_range": f"AED {min_price:,.0f} - AED {max_price:,.0f}",
+                                            "property_count": len(listings)
+                                        }
+                                    }
+                                else:
+                                    answer = {
+                                        "text": "Found properties but couldn't analyze prices.",
+                                        "analysis": {"property_count": len(listings)}
+                                    }
+                            else:
+                                answer = {
+                                    "text": "No properties found for price analysis.",
+                                    "analysis": {"property_count": 0}
+                                }
+                        else:
+                            answer = {
+                                "text": f"Found {len(listings)} properties matching your criteria.",
+                                "analysis": {"property_count": len(listings)}
+                            }
+                        
+                        combined_response["answers"].append({
+                            "query": sub_query,
+                            "answer": answer,
+                            "type": "analytical"
+                        })
+                        combined_response["combined_data"].extend(listings if listings else [])
+                    else:
+                        # Handle search request
+                        listings = search_properties(sub_filters)
+                        combined_response["answers"].append({
+                            "query": sub_query,
+                            "answer": {
+                                "text": f"Found {len(listings)} matching properties",
+                                "count": len(listings)
+                            },
+                            "type": "search"
+                        })
+                        combined_response["combined_data"].extend(listings if listings else [])
+                except Exception as e:
+                    print(f"Error processing sub-question: {e}")
+                    combined_response["answers"].append({
+                        "query": sub_query,
+                        "answer": {"text": "Error processing this part of your question"},
+                        "type": "error"
+                    })
+        except Exception as e:
+            print(f"Error processing multi-question request: {e}")
+            return jsonify({
+                "error": "Failed to process multi-question request",
+                "success": False,
+                "details": str(e)
+            }), 500
+        
+        if not combined_response["answers"]:
+            return jsonify({
+                "error": "No valid answers generated",
+                "success": False
+            }), 400
+        
+        return jsonify(combined_response), 200
+
+    # Extract question type early
+    q_type = filters.get("question_type", "search_request")
+
+    # Handle analytical questions FIRST (before other question types)
+    if q_type == "analytical_question":
+        return handle_analytical_question(query, filters, search_properties)
 
     # ✅ If it's a QUESTION (Q&A mode)
     if filters.get("is_question"):
-        q_type = filters.get("question_type")
+        # q_type already extracted above
         inner_filters = filters.get("filters", {})
 
         # --- Normalize filters ---
@@ -290,15 +874,42 @@ def nl_search():
         print("inner filters", inner_filters)
 
         # Fetch listings once for analysis
-        listings = search_properties(inner_filters)
+        try:
+            listings = search_properties(inner_filters)
+        except Exception as e:
+            print(f"Error fetching properties for question: {e}")
+            listings = []
 
         if not listings:
-            return jsonify({
-                "is_question": True,
-                "question_type": q_type,
-                "filters": inner_filters,
-                "answer": {"text": "No properties found."},
-            }), 200
+            # Provide helpful response even when no properties are found
+            if q_type == "general_question" and ("how to buy" in query.lower() or "how to purchase" in query.lower()):
+                answer = {
+                    "text": f"To buy a villa in {inner_filters.get('query', 'Dubai')}, here's what you need to know:",
+                    "steps": [
+                        "1. **Get Pre-Approval**: Contact a bank for mortgage pre-approval",
+                        "2. **Find a Property**: Search for available villas in the area",
+                        "3. **Make an Offer**: Work with a real estate agent to make an offer",
+                        "4. **Legal Process**: Complete due diligence and legal documentation",
+                        "5. **Final Payment**: Complete the transaction and transfer ownership"
+                    ],
+                    "additional_info": {
+                        "note": "No current listings found, but the process remains the same",
+                        "location": inner_filters.get('query', 'Dubai')
+                    }
+                }
+                return jsonify({
+                    "is_question": True,
+                    "question_type": q_type,
+                    "filters": inner_filters,
+                    "answer": answer,
+                }), 200
+            else:
+                return jsonify({
+                    "is_question": True,
+                    "question_type": q_type,
+                    "filters": inner_filters,
+                    "answer": {"text": "No properties found."},
+                }), 200
 
         # 🔎 Handle different question types
         if q_type == "price_range":
@@ -394,6 +1005,40 @@ def nl_search():
                 "data": result.get("data", []),
 
             }), 200
+        elif q_type == "general_question":
+            # Handle general questions like "how to buy a villa"
+            if "how to buy" in query.lower() or "how to purchase" in query.lower():
+                answer = {
+                    "text": f"To buy a villa in {inner_filters.get('query', 'Dubai')}, here's what you need to know:",
+                    "steps": [
+                        "1. **Get Pre-Approval**: Contact a bank for mortgage pre-approval",
+                        "2. **Find a Property**: Browse available villas (I found {len(listings)} options for you)",
+                        "3. **Make an Offer**: Work with a real estate agent to make an offer",
+                        "4. **Legal Process**: Complete due diligence and legal documentation",
+                        "5. **Final Payment**: Complete the transaction and transfer ownership"
+                    ],
+                    "additional_info": {
+                        "average_price": f"AED {sum([item.get('price', 0) for item in listings if item.get('price')]) / len([item for item in listings if item.get('price')]):,.0f}" if listings else "Contact for pricing",
+                        "available_properties": len(listings),
+                        "location": inner_filters.get('query', 'Dubai')
+                    }
+                }
+            else:
+                # Generic question - return listings with analysis
+                answer = {
+                    "text": f"Found {len(listings)} properties matching your criteria in {inner_filters.get('query', 'the area')}"
+                }
+
+            return jsonify({
+                "is_question": True,
+                "question_type": q_type,
+                "filters": inner_filters,
+                "answer": answer,
+                "data": listings,
+                "agent_insights": generate_agent_insights(listings, query, inner_filters),
+                "suggestions": generate_proactive_suggestions(listings, query, inner_filters)
+            }), 200
+
         else:
             return jsonify({
                 "is_question": True,
@@ -416,7 +1061,75 @@ def nl_search():
 
     # ✅ Default: Normal property search
     listings = search_properties(filters.get('filters', {}))
-    return jsonify(listings)
+    
+    # Add agent capabilities to the response
+    response = {
+        "success": True,
+        "agent_id": "real_estate_agent_v1",
+        "timestamp": datetime.now().isoformat(),
+        "query": query,
+        "parsed_filters": filters,
+        "properties": listings,
+        "property_count": len(listings) if listings else 0,
+        "agent_insights": [],
+        "suggestions": []
+    }
+    
+    # Generate insights if we have results
+    if listings:
+        # Price analysis
+        prices = [item.get("price", 0) for item in listings if item.get("price")]
+        if prices:
+            avg_price = sum(prices) / len(prices)
+            min_price = min(prices)
+            max_price = max(prices)
+            
+            response["agent_insights"].append({
+                "type": "price_analysis",
+                "title": "Price Insights",
+                "message": f"Found {len(listings)} properties with prices ranging from AED {min_price:,.0f} to AED {max_price:,.0f}",
+                "data": {
+                    "average_price": avg_price,
+                    "price_range": {"min": min_price, "max": max_price},
+                    "property_count": len(listings)
+                }
+            })
+        
+        # Location analysis
+        locations = [item.get("location_name", "") for item in listings if item.get("location_name")]
+        if locations:
+            unique_locations = list(set(locations))
+            response["agent_insights"].append({
+                "type": "location_analysis",
+                "title": "Location Distribution",
+                "message": f"Properties found in {len(unique_locations)} different areas within {filters.get('filters', {}).get('query', 'the search area')}",
+                "data": {
+                    "unique_locations": len(unique_locations),
+                    "top_locations": unique_locations[:5]
+                }
+            })
+        
+        # Proactive suggestions
+        response["suggestions"].extend([
+            "Would you like me to filter by price range?",
+            "I can help you compare similar properties",
+            "Would you like to see properties on a map?",
+            "I can set up alerts for new properties matching your criteria"
+        ])
+    else:
+        response["agent_insights"].append({
+            "type": "no_results",
+            "title": "No Properties Found",
+            "message": "No properties found matching your criteria. Try adjusting your search parameters.",
+            "suggestions": [
+                "Try a broader location search",
+                "Consider different property types",
+                "Adjust your price range",
+                "Check spelling of location names"
+            ]
+        })
+    
+    return jsonify(response)
 
 
 # -------------------

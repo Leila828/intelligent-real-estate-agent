@@ -1,304 +1,171 @@
-# 🏠 Real Estate AI Chatbot
+# 🤖 Intelligent Real Estate Agent
 
-> An intelligent real estate search platform powered by natural language processing and real-time property data aggregation.
-
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-[![Flask](https://img.shields.io/badge/Flask-3.1.2-green.svg)](https://flask.palletsprojects.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Deploy](https://img.shields.io/badge/Deploy-Railway-000000.svg)](https://railway.app)
+A sophisticated AI-powered real estate chatbot that provides intelligent property search, market analysis, and personalized recommendations for the UAE market.
 
 ## ✨ Features
 
-- 🤖 **Natural Language Processing**: Search properties using conversational queries
-- 🏘️ **Real-time Property Data**: Live listings from Property Finder API
-- 🧠 **AI-Powered Intelligence**: LLaMA 3 integration for smart query understanding
-- ⚡ **Intelligent Caching**: 30-minute cache system for optimal performance
-- 🗺️ **Interactive Maps**: Location-based property visualization
-- 💰 **Price Estimation**: AI-powered property valuation
-- 📱 **Responsive Design**: Works on desktop and mobile devices
-- 🔍 **Advanced Search**: Multiple filters and search options
+- **🧠 Intelligent Query Understanding**: Uses LLM-based natural language processing
+- **🏠 Property Search**: Search properties across all UAE locations
+- **📊 Market Analysis**: Price comparisons, affordability calculations, and market insights
+- **🎯 Location-Aware**: Works with any UAE location dynamically
+- **💬 Natural Conversations**: Handles complex queries like "Compare prices in Palm Jumeirah vs Dubai Marina"
+- **📱 Modern UI**: Beautiful, responsive web interface
+- **⚡ Fast Performance**: Intelligent caching and optimized API calls
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.12+
 - Git
-- Code editor (VS Code recommended)
 
 ### Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/your-username/real-estate-app-chatbot.git
-cd real-estate-app-chatbot
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/intelligent-real-estate-agent.git
+   cd intelligent-real-estate-agent
+   ```
 
-# Create virtual environment
-python -m venv venv
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
+4. **Run the application**
+   ```bash
+   python app.py
+   ```
 
-# Initialize database
-python -c "from app import app; app.app_context().push(); import database; database.init_db()"
-
-# Run the application
-python app.py
-```
-
-Visit `http://localhost:5000` to see the application in action!
-
-## 🎯 Usage Examples
-
-### Natural Language Queries
-```
-"Show me villas for sale in Dubai Marina"
-"Find apartments under 2 million in Downtown Dubai"
-"What's the average price of 3-bedroom villas in Damac Hills?"
-"All current villa for sale in Damac hills"
-```
-
-### API Endpoints
-
-#### Search Properties
-```bash
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"query": "villas for sale in Dubai"}' \
-  http://localhost:5000/api/nl_search
-```
-
-#### Get Property Details
-```bash
-curl http://localhost:5000/api/properties/15316766
-```
+5. **Open your browser**
+   Navigate to `http://localhost:5000`
 
 ## 🏗️ Architecture
 
-### System Components
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Flask App     │    │   Database      │
-│   (HTML/JS)     │◄──►│   (Python)      │◄──►│   (SQLite)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │  External APIs  │
-                       │  (Property      │
-                       │   Finder)       │
-                       └─────────────────┘
-```
+### Core Components
 
-### Key Technologies
-- **Backend**: Python Flask
-- **Database**: SQLite with intelligent caching
-- **AI/ML**: Ollama (LLaMA 3) for natural language processing
-- **Frontend**: HTML5, CSS3, JavaScript, Leaflet Maps
-- **External APIs**: Property Finder API
-- **Deployment**: Railway/Render/Heroku ready
+- **`app.py`**: Main Flask application with intelligent search endpoints
+- **`intelligent_agent.py`**: AI agent with LLM-based query understanding
+- **`property_finder.py`**: Property Finder API integration
+- **`database.py`**: SQLite caching system
+- **`ollam.py`**: Natural language processing utilities
+- **`templates/`**: Frontend HTML templates
 
-## 📁 Project Structure
+### API Endpoints
 
+- `POST /api/intelligent_search` - Main intelligent search endpoint
+- `POST /api/nl_search` - Fallback natural language search
+- `GET /api/properties/<id>` - Property details
+- `GET /get_image` - Image proxy
+
+## 🎯 Usage Examples
+
+### Property Search
 ```
-real-estate-app-chatbot/
-├── app.py                 # Main Flask application
-├── database.py            # Database operations and caching
-├── property_finder.py     # Property Finder API integration
-├── ollam.py              # Natural language processing
-├── requirements.txt      # Python dependencies
-├── schema.sql           # Database schema
-├── templates/           # HTML templates
-│   ├── index.html       # Main application interface
-│   ├── map_page.html    # Map view template
-│   └── property_detail.html
-├── tests/               # Test files
-└── docs/                # Documentation
+"Show me villas in Victory Heights"
+"Find apartments in Dubai Marina under 2 million AED"
+"Properties in Arabian Ranches with 3+ bedrooms"
 ```
 
-## 🔧 Configuration
-
-### Environment Variables
-```bash
-# Development
-FLASK_ENV=development
-DEBUG=True
-DATABASE_URL=sqlite:///bayut_properties.db
-
-# Production
-FLASK_ENV=production
-DEBUG=False
-DATABASE_URL=sqlite:///bayut_properties.db
+### Market Analysis
+```
+"Compare prices in Palm Jumeirah vs Dubai Marina"
+"What's the average price of villas in Sports City?"
+"How many years of work needed to buy a villa in Victory Heights?"
 ```
 
-### Database Schema
-The application uses SQLite with two main tables:
-- `search_queries`: Stores query metadata and expiration
-- `cached_properties`: Stores property data with 30-minute TTL
+### How-to Guides
+```
+"How to buy a villa in Dubai?"
+"What's the process for selling property in UAE?"
+```
 
 ## 🚀 Deployment
 
 ### Railway (Recommended)
-1. Go to [Railway.app](https://railway.app)
-2. Sign up with GitHub
-3. Click "Deploy from GitHub repo"
-4. Select this repository
-5. Railway automatically deploys your app
+1. Fork this repository
+2. Connect your GitHub account to [Railway](https://railway.app)
+3. Deploy from GitHub repository
+4. Railway will automatically detect the `railway.json` configuration
 
 ### Render
-1. Go to [Render.com](https://render.com)
-2. Create new "Web Service"
-3. Connect your GitHub repo
-4. Set build command: `pip install -r requirements.txt`
-5. Set start command: `python app.py`
+1. Connect your GitHub repository to [Render](https://render.com)
+2. Create a new Web Service
+3. Use the following settings:
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn app:app`
 
 ### Heroku
-```bash
-# Install Heroku CLI
-heroku create your-app-name
-git push heroku main
-```
+1. Install [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
+2. Create a new Heroku app: `heroku create your-app-name`
+3. Deploy: `git push heroku main`
+
+## 🔧 Configuration
+
+### Environment Variables
+- `FLASK_ENV`: Set to `production` for production deployment
+- `PORT`: Port number (automatically set by deployment platforms)
+
+### Database
+The application uses SQLite for caching. The database is automatically created on first run.
 
 ## 📊 Performance
 
-### Caching Strategy
-- **TTL**: 30 minutes for all cached queries
-- **Cache Key**: Based on query parameters
-- **Storage**: SQLite database
-- **Hit Rate**: Target 70%+ cache efficiency
+- **Intelligent Caching**: Reduces API calls and improves response times
+- **Async Processing**: Non-blocking operations for better user experience
+- **Fallback Systems**: Graceful degradation when external services are unavailable
 
-### Performance Metrics
-- **Response Time**: < 2 seconds for cached queries
-- **API Latency**: < 5 seconds for fresh data
-- **Concurrent Users**: Support 100+ simultaneous users
+## 🛠️ Development
 
-## 🧪 Testing
-
-### Manual Testing
-```bash
-# Test natural language search
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"query": "villas for sale in Dubai Marina"}' \
-  http://localhost:5000/api/nl_search
-
-# Test structured search
-curl "http://localhost:5000/api/search?purpose=for-sale&rooms=3"
+### Project Structure
+```
+├── app.py                 # Main Flask application
+├── intelligent_agent.py   # AI agent implementation
+├── property_finder.py     # Property Finder API integration
+├── database.py           # Database utilities
+├── ollam.py              # NLP utilities
+├── templates/            # Frontend templates
+├── requirements.txt      # Python dependencies
+├── Procfile             # Deployment configuration
+└── railway.json         # Railway deployment config
 ```
 
-### Automated Testing
-```python
-# Run tests
-python -m pytest tests/
-
-# Run with coverage
-python -m pytest --cov=app tests/
-```
-
-## 📚 Documentation
-
-- **[Project Documentation](PROJECT_DOCUMENTATION.md)**: Comprehensive technical documentation
-- **[API Documentation](API_DOCUMENTATION.md)**: Complete API reference
-- **[Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md)**: System architecture and workflows
-- **[Team Onboarding](TEAM_ONBOARDING.md)**: Guide for new team members
-- **[Deployment Guide](DEPLOYMENT_GUIDE.md)**: Production deployment instructions
+### Adding New Features
+1. Extend the `IntelligentRealEstateAgent` class in `intelligent_agent.py`
+2. Add new intent handlers for different query types
+3. Update the frontend templates for new response types
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit your changes: `git commit -am 'Add new feature'`
+4. Push to the branch: `git push origin feature-name`
 5. Submit a pull request
-
-### Code Style
-- Follow PEP 8 Python style guide
-- Use type hints where appropriate
-- Write docstrings for all functions
-- Implement proper error handling
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Application Won't Start
-```bash
-# Check Python version
-python --version
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Initialize database
-python -c "from app import app; app.app_context().push(); import database; database.init_db()"
-```
-
-#### Database Issues
-```bash
-# Reinitialize database
-rm bayut_properties.db
-python -c "from app import app; app.app_context().push(); import database; database.init_db()"
-```
-
-#### API Integration Issues
-```python
-# Test Property Finder API
-import property_finder
-result = property_finder.search_location('Dubai')
-print(result)
-```
-
-## 📈 Roadmap
-
-### Version 1.1
-- [ ] User authentication and profiles
-- [ ] Property favorites and saved searches
-- [ ] Advanced filtering options
-- [ ] Property comparison tool
-
-### Version 1.2
-- [ ] Machine learning price predictions
-- [ ] Property recommendations
-- [ ] Market analytics dashboard
-- [ ] Mobile app (React Native)
-
-### Version 2.0
-- [ ] Multi-language support
-- [ ] International property listings
-- [ ] Virtual property tours
-- [ ] AI-powered property matching
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🆘 Support
 
-- **Property Finder**: For providing comprehensive property data
-- **Ollama**: For powerful local LLM capabilities
-- **Flask Community**: For the excellent web framework
-- **Open Source Contributors**: For the amazing tools and libraries
+For support and questions:
+- Create an issue in this repository
+- Check the documentation in the `/docs` folder
+- Review the API documentation in `API_DOCUMENTATION.md`
 
-## 📞 Support
+## 🎉 Acknowledgments
 
-- **Documentation**: Check the docs folder for detailed guides
-- **Issues**: Report bugs and request features on GitHub
-- **Discussions**: Join our community discussions
-- **Email**: Contact us at [your-email@domain.com]
-
-## 🌟 Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=your-username/real-estate-app-chatbot&type=Date)](https://star-history.com/#your-username/real-estate-app-chatbot&Date)
+- Property Finder API for property data
+- Ollama for LLM capabilities
+- Flask for the web framework
+- All contributors and testers
 
 ---
 
-**Built with ❤️ by the Real Estate AI Team**
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app)
-[![Deploy on Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com)
+**Built with ❤️ for the UAE real estate market**

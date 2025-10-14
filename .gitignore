@@ -1,27 +1,97 @@
-# Python bytecode
-*.pyc
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual environment
+# Virtual Environment
 venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# Environment variables
-.env
-.env.*
-*.pem
-*.key
-
-# SQLite or local DBs
-*.sqlite3
+# Database files
 *.db
+*.sqlite
+*.sqlite3
+agent_memory.db
+bayut_properties.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Logs
 *.log
+logs/
 
-# IDEs and system files
-.vscode/
-.idea/
-.DS_Store
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# OS files
-Thumbs.db
+# Screenshots and test files
+Screenshot*.png
+*.png
+*.jpg
+*.jpeg
+
+# Test files and temporary files
+tes*.py
+ff.py
+extract.py
+teerhem.py
+nl_parser.py
+nlp.py
+
+# Old agent files (not used in current system)
+agent_integration.py
+agent_integration_fixed.py
+app_with_agent.py
+ai_agent_architecture.py
+agent_requirements.txt
+
+# Documentation files (keep only essential ones)
+AGENT_ARCHITECTURE_DOCUMENTATION.md
+AGENT_TRANSFORMATION_GUIDE.md
+ARCHITECTURE_DIAGRAMS.md
+API_DOCUMENTATION.md
+DEPLOYMENT_GUIDE.md
+PROJECT_DOCUMENTATION.md
+TEAM_ONBOARDING.md
+ACTION_ITEMS.md
+
+# Tests directory (not needed for deployment)
+tests/

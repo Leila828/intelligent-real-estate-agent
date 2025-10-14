@@ -46,7 +46,7 @@ def search_properties(filters, page=1, limit=50):
     query_id = database.find_cached_query(query_string)
 
     if query_id:
-        print(f"✅ Cache hit for query: {query_string}")
+        print(f"Cache hit for query: {query_string}")
         # Retrieve paginated properties from the cache
         properties_data = database.get_properties_for_query(query_id)
 
@@ -58,7 +58,7 @@ def search_properties(filters, page=1, limit=50):
 
         return paginated_properties
     else:
-        print(f"🔄 Cache miss for query: {query_string}. Fetching live from Property Finder...")
+        print(f"Cache miss for query: {query_string}. Fetching live from Property Finder...")
 
         # 5. Fetch live data from Property Finder.
         #    Note: The Property Finder API itself does not have a 'limit' parameter,

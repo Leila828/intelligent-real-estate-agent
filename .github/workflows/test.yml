@@ -1,0 +1,134 @@
+name: Test Intelligent Real Estate Agent
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: [3.12]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    - name: Test imports
+      run: |
+        python -c "import app; print('✅ app.py imports successfully')"
+        python -c "import intelligent_agent; print('✅ intelligent_agent.py imports successfully')"
+        python -c "import property_finder; print('✅ property_finder.py imports successfully')"
+        python -c "import database; print('✅ database.py imports successfully')"
+        python -c "import ollam; print('✅ ollam.py imports successfully')"
+    
+    - name: Test Flask app startup
+      run: |
+        python -c "
+        from app import app
+        with app.test_client() as client:
+            response = client.get('/')
+            assert response.status_code == 200
+            print('✅ Flask app starts successfully')
+        "
+    
+    - name: Test API endpoints
+      run: |
+        python -c "
+        from app import app
+        import json
+        
+        with app.test_client() as client:
+            # Test intelligent search endpoint
+            response = client.post('/api/intelligent_search', 
+                                 json={'query': 'test query'},
+                                 content_type='application/json')
+            assert response.status_code == 200
+            print('✅ Intelligent search endpoint works')
+            
+            # Test fallback search endpoint
+            response = client.post('/api/nl_search', 
+                                 json={'query': 'test query'},
+                                 content_type='application/json')
+            assert response.status_code == 200
+            print('✅ Fallback search endpoint works')
+        "
+    
+    - name: Test intelligent agent
+      run: |
+        python -c "
+        import asyncio
+        from intelligent_agent import agent
+        
+        async def test_agent():
+            result = await agent.process_query('test query')
+            assert 'success' in result
+            assert 'agent_id' in result
+            print('✅ Intelligent agent works')
+        
+        asyncio.run(test_agent())
+        "
+    
+    - name: Test location extraction
+      run: |
+        python -c "
+        import asyncio
+        from intelligent_agent import agent
+        
+        async def test_location_extraction():
+            locations = await agent._extract_locations_from_query('villas in Dubai Marina')
+            assert len(locations) > 0
+            print(f'✅ Location extraction works: {locations}')
+        
+        asyncio.run(test_location_extraction())
+        "
+    
+    - name: Test property finder
+      run: |
+        python -c "
+        import property_finder
+        
+        # Test location search
+        locations = property_finder.search_location('Dubai')
+        assert 'data' in locations
+        print('✅ Property Finder location search works')
+        "
+    
+    - name: Test database
+      run: |
+        python -c "
+        import database
+        from app import app
+        
+        with app.app_context():
+            database.init_db()
+            print('✅ Database initialization works')
+        "
+    
+    - name: Check code quality
+      run: |
+        pip install flake8
+        flake8 app.py intelligent_agent.py property_finder.py database.py ollam.py --max-line-length=120 --ignore=E501,W503
+    
+    - name: Test deployment files
+      run: |
+        echo "Checking deployment configuration files..."
+        test -f requirements.txt && echo "✅ requirements.txt exists"
+        test -f Procfile && echo "✅ Procfile exists"
+        test -f railway.json && echo "✅ railway.json exists"
+        test -f runtime.txt && echo "✅ runtime.txt exists"
+        echo "✅ All deployment files present"
