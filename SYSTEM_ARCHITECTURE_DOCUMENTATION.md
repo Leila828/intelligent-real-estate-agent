@@ -919,15 +919,13 @@ class APIClient {
 ## 📞 Contact & Support
 
 **System Architect Review Contact:**
-- **Technical Lead**: [Your Name]
-- **Email**: [Your Email]
-- **Repository**: [GitHub Repository URL]
-- **Documentation**: [Documentation URL]
+- **Technical Lead**: Leila HABIB
+- **Email**: leila@ixlconsulting.tech
+
 
 **Deployment Information:**
-- **Production URL**: [Deployment URL]
-- **Staging URL**: [Staging URL]
-- **Health Check**: [Health Check URL]
+- **Production URL**: https://web-production-bc60.up.railway.app/
+
 
 ---
 
